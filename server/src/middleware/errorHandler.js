@@ -1,8 +1,14 @@
-// Central error responder. Any thrown/next(err) inside async controllers
-// (via asyncHandler) lands here and returns a JSON error body.
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
-  const status = err.status || err.statusCode || 500;
+  let status = err.status || err.statusCode || 500;
+
+  // Map common Mongoose failures to correct HTTP codes so controllers don't
+  // have to duplicate every validation the schema already enforces.
+  if (err.name === 'ValidationError' || err.name === 'CastError') {
+    status = 400;
+  } else if (err.code === 11000) {
+    status = 409;
+  }
 
   if (status >= 500) {
     console.error('Unhandled error:', err);
