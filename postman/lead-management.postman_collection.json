@@ -1,0 +1,661 @@
+{
+  "info": {
+    "_postman_id": "lead-management-collection",
+    "name": "Lead Management API",
+    "description": "REST API for the Lead Management app — Digital Heroes Training Task.\n\n**How to use:**\n1. Import this collection into Postman.\n2. Confirm `baseUrl` collection variable points at your running API (default `http://localhost:5000`).\n3. Run **00. Setup > Login as Admin** first, then **Login as Member** — both save JWTs into collection variables that every other request reuses.\n4. Run the folders top-to-bottom, or click Runner and execute the whole collection.\n\nMost requests include a small test script that asserts the expected status code and captures IDs into collection variables (`leadId`, `adminId`, `memberId`).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "adminEmail", "value": "admin@demo.com" },
+    { "key": "adminPassword", "value": "Admin@123" },
+    { "key": "memberEmail", "value": "member@demo.com" },
+    { "key": "memberPassword", "value": "Member@123" },
+    { "key": "adminToken", "value": "" },
+    { "key": "memberToken", "value": "" },
+    { "key": "adminId", "value": "" },
+    { "key": "memberId", "value": "" },
+    { "key": "leadId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00. Setup",
+      "description": "Run these two first. Each saves a JWT + user id into collection variables used everywhere else.",
+      "item": [
+        {
+          "name": "Login as Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "pm.test('Has token', () => pm.expect(res.token).to.be.a('string'));",
+              "pm.test('User role is admin', () => pm.expect(res.user.role).to.eql('admin'));",
+              "pm.collectionVariables.set('adminToken', res.token);",
+              "pm.collectionVariables.set('adminId', res.user.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "Login as Member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{memberPassword}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "pm.test('Has token', () => pm.expect(res.token).to.be.a('string'));",
+              "pm.test('User role is member', () => pm.expect(res.user.role).to.eql('member'));",
+              "pm.collectionVariables.set('memberToken', res.token);",
+              "pm.collectionVariables.set('memberId', res.user.id);"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login - wrong password (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"wrong-password\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+              "pm.test('Message is opaque (no enumeration)', () => pm.expect(pm.response.json().message).to.eql('Invalid credentials'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Login - missing fields (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"email\": \"{{adminEmail}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "Register - admin creates member (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Priya Extra\",\n  \"email\": \"priya-extra@demo.com\",\n  \"password\": \"Priya@123\",\n  \"role\": \"member\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));"
+            ]}
+          }]
+        },
+        {
+          "name": "Register - duplicate email (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Dup\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"whatever\",\n  \"role\": \"member\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+            ]}
+          }]
+        },
+        {
+          "name": "Register - member cannot register (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"email\": \"fail@demo.com\",\n  \"password\": \"Xxx@1234\",\n  \"role\": \"member\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "GET /api/users - admin (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('Response has users array', () => pm.expect(pm.response.json().users).to.be.an('array'));",
+              "pm.test('No passwordHash leaked', () => pm.response.json().users.forEach(u => pm.expect(u).to.not.have.property('passwordHash')));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/users - member (403)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/users - no token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Public capture",
+      "item": [
+        {
+          "name": "POST /api/public/leads - valid (201) [saves leadId]",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/public/leads", "host": ["{{baseUrl}}"], "path": ["api", "public", "leads"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Rahul Sharma\",\n  \"email\": \"rahul@acme.com\",\n  \"phone\": \"+91-9876543210\",\n  \"company\": \"Acme Ltd\",\n  \"source\": \"website\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const res = pm.response.json();",
+              "pm.test('Status is new', () => pm.expect(res.lead.status).to.eql('new'));",
+              "pm.test('assignedTo is null', () => pm.expect(res.lead.assignedTo).to.eql(null));",
+              "pm.collectionVariables.set('leadId', res.lead.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/public/leads - honeypot (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/public/leads", "host": ["{{baseUrl}}"], "path": ["api", "public", "leads"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Bot\",\n  \"email\": \"bot@x.com\",\n  \"website\": \"http://spam\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));",
+              "pm.test('Opaque message', () => pm.expect(pm.response.json().message).to.eql('Invalid submission'));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/public/leads - missing fields (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/public/leads", "host": ["{{baseUrl}}"], "path": ["api", "public", "leads"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Only Name\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/public/leads - invalid email (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/public/leads", "host": ["{{baseUrl}}"], "path": ["api", "public", "leads"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Bad Email\",\n  \"email\": \"not-an-email\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest (mapped from Mongoose)', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Assign (admin only)",
+      "item": [
+        {
+          "name": "PATCH /api/leads/:id/assign - admin -> member (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "assign"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"assignedTo\": \"{{memberId}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('assignedTo populated', () => pm.expect(pm.response.json().lead.assignedTo).to.be.an('object'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH /api/leads/:id/assign - member (403)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "assign"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"assignedTo\": null\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH /api/leads/:id/assign - target is admin, not member (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "assign"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"assignedTo\": \"{{adminId}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Read",
+      "item": [
+        {
+          "name": "GET /api/leads - admin (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["api", "leads"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "pm.test('Has pagination shape', () => {",
+              "  pm.expect(res).to.have.property('items');",
+              "  pm.expect(res).to.have.property('page');",
+              "  pm.expect(res).to.have.property('limit');",
+              "  pm.expect(res).to.have.property('total');",
+              "  pm.expect(res).to.have.property('pages');",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads - member (only assigned)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads", "host": ["{{baseUrl}}"], "path": ["api", "leads"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const memberId = pm.collectionVariables.get('memberId');",
+              "pm.response.json().items.forEach(l => {",
+              "  const aid = l.assignedTo && (l.assignedTo._id || l.assignedTo);",
+              "  pm.expect(String(aid)).to.eql(memberId);",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads?status=new",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads?status=new", "host": ["{{baseUrl}}"], "path": ["api", "leads"], "query": [{ "key": "status", "value": "new" }] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.response.json().items.forEach(l => pm.expect(l.status).to.eql('new'));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads?q=rahul",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads?q=rahul", "host": ["{{baseUrl}}"], "path": ["api", "leads"], "query": [{ "key": "q", "value": "rahul" }] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads?assignedTo=unassigned",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads?assignedTo=unassigned", "host": ["{{baseUrl}}"], "path": ["api", "leads"], "query": [{ "key": "assignedTo", "value": "unassigned" }] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.response.json().items.forEach(l => pm.expect(l.assignedTo).to.eql(null));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads/:id - admin (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('Returns lead', () => pm.expect(pm.response.json().lead.id).to.eql(pm.collectionVariables.get('leadId')));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads/not-a-valid-id (404)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/not-a-valid-id", "host": ["{{baseUrl}}"], "path": ["api", "leads", "not-a-valid-id"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Update",
+      "item": [
+        {
+          "name": "PATCH /api/leads/:id - admin updates fields (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"company\": \"Acme Ltd (updated)\",\n  \"status\": \"contacted\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('Status updated', () => pm.expect(pm.response.json().lead.status).to.eql('contacted'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH /api/leads/:id - member updates own status (200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"status\": \"qualified\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('Status is qualified', () => pm.expect(pm.response.json().lead.status).to.eql('qualified'));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH /api/leads/:id - member forbidden field (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"name\": \"Trying to change identity\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "PATCH /api/leads/:id - assignedTo in body (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"assignedTo\": \"{{memberId}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));",
+              "pm.test('Message points at /assign endpoint', () => pm.expect(pm.response.json().message).to.include('/assign'));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Delete",
+      "item": [
+        {
+          "name": "DELETE /api/leads/:id - member (403)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]}
+          }]
+        },
+        {
+          "name": "DELETE /api/leads/:id - admin (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+            ]}
+          }]
+        }
+      ]
+    }
+  ]
+}
