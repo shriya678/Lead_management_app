@@ -1,17 +1,17 @@
 const mongoose = require('mongoose');
 const Lead = require('../models/Lead');
 const User = require('../models/User');
+const Note = require('../models/Note');
+const Activity = require('../models/Activity');
 const { parsePagination } = require('../utils/pagination');
+const { isMemberOwner } = require('../utils/ownership');
+const { writeActivity } = require('../utils/activityLog');
 
 const ADMIN_UPDATABLE = ['name', 'email', 'phone', 'company', 'source', 'status'];
 const MEMBER_UPDATABLE = ['status', 'phone', 'company'];
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function isMemberOwner(lead, user) {
-  return lead.assignedTo && lead.assignedTo.toString() === user.id;
 }
 
 async function list(req, res) {
@@ -139,10 +139,31 @@ async function update(req, res) {
     });
   }
 
+  const oldStatus = lead.status;
+
   Object.assign(lead, updates);
   await lead.save();
-  await lead.populate('assignedTo', 'name email');
 
+  if (updates.status && updates.status !== oldStatus) {
+    await writeActivity({
+      leadId: lead.id,
+      actorId: req.user.id,
+      type: 'status_changed',
+      meta: { from: oldStatus, to: updates.status },
+    });
+  }
+
+  const otherFields = Object.keys(updates).filter((k) => k !== 'status');
+  if (otherFields.length > 0) {
+    await writeActivity({
+      leadId: lead.id,
+      actorId: req.user.id,
+      type: 'updated',
+      meta: { fields: otherFields },
+    });
+  }
+
+  await lead.populate('assignedTo', 'name email');
   return res.status(200).json({ lead });
 }
 
@@ -182,10 +203,18 @@ async function assign(req, res) {
     return res.status(404).json({ error: 'NotFound', message: 'Lead not found' });
   }
 
+  const oldAssignedTo = lead.assignedTo ? lead.assignedTo.toString() : null;
   lead.assignedTo = assignedTo;
   await lead.save();
-  await lead.populate('assignedTo', 'name email');
 
+  await writeActivity({
+    leadId: lead.id,
+    actorId: req.user.id,
+    type: 'assigned',
+    meta: { from: oldAssignedTo, to: assignedTo },
+  });
+
+  await lead.populate('assignedTo', 'name email');
   return res.status(200).json({ lead });
 }
 
@@ -194,10 +223,15 @@ async function remove(req, res) {
     return res.status(404).json({ error: 'NotFound', message: 'Lead not found' });
   }
 
-  const result = await Lead.findByIdAndDelete(req.params.id);
-  if (!result) {
+  const lead = await Lead.findById(req.params.id);
+  if (!lead) {
     return res.status(404).json({ error: 'NotFound', message: 'Lead not found' });
   }
+
+  // Explicit cascade — three ops instead of a transaction to keep Atlas M0 friendly.
+  await Note.deleteMany({ leadId: lead.id });
+  await Activity.deleteMany({ leadId: lead.id });
+  await Lead.findByIdAndDelete(lead.id);
 
   return res.status(204).end();
 }
