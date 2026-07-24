@@ -625,6 +625,160 @@
       ]
     },
     {
+      "name": "Leads - Notes",
+      "item": [
+        {
+          "name": "POST /api/leads/:id/notes - member on own lead (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/notes", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "notes"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"body\": \"Called today, sending proposal Monday\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const res = pm.response.json();",
+              "pm.test('Note has id and body', () => {",
+              "  pm.expect(res.note.id).to.be.a('string');",
+              "  pm.expect(res.note.body).to.eql('Called today, sending proposal Monday');",
+              "});",
+              "pm.test('Author is populated', () => pm.expect(res.note.authorId).to.be.an('object'));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/leads/:id/notes - empty body (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{memberToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/notes", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "notes"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"body\": \"   \"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/leads/:id/notes - lead not found (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/leads/000000000000000000000000/notes", "host": ["{{baseUrl}}"], "path": ["api", "leads", "000000000000000000000000", "notes"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"body\": \"note for a ghost lead\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads/:id/notes - member on own lead (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/notes", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "notes"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "pm.test('Paginated shape', () => {",
+              "  pm.expect(res).to.have.property('items');",
+              "  pm.expect(res).to.have.property('total');",
+              "});",
+              "pm.test('At least one note', () => pm.expect(res.items.length).to.be.at.least(1));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Leads - Activity",
+      "item": [
+        {
+          "name": "GET /api/leads/:id/activity - full trail (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/activity", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "activity"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "const types = res.items.map(a => a.type);",
+              "pm.test('Trail contains created', () => pm.expect(types).to.include('created'));",
+              "pm.test('Trail contains assigned', () => pm.expect(types).to.include('assigned'));",
+              "pm.test('Trail contains status_changed', () => pm.expect(types).to.include('status_changed'));",
+              "pm.test('Trail contains note_added', () => pm.expect(types).to.include('note_added'));",
+              "pm.test('created has null actor (public form)', () => {",
+              "  const created = res.items.find(a => a.type === 'created');",
+              "  pm.expect(created.actorId).to.eql(null);",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads/:id/activity - member on own lead (200)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{memberToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/{{leadId}}/activity", "host": ["{{baseUrl}}"], "path": ["api", "leads", "{{leadId}}", "activity"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/leads/:id/activity - lead not found (404)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/leads/000000000000000000000000/activity", "host": ["{{baseUrl}}"], "path": ["api", "leads", "000000000000000000000000", "activity"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
       "name": "Leads - Delete",
       "item": [
         {
