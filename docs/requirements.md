@@ -25,14 +25,6 @@ This document captures the Digital Heroes Task A brief verbatim, then maps every
 > - Deployed application + credentials for each role
 > - API documentation
 >
-> **How we score it**
-> | Evaluation criterion | Weight |
-> |---|---|
-> | Architecture and data modeling | 30 |
-> | Auth and permission correctness | 25 |
-> | API design and documentation | 20 |
-> | Test coverage and deployment | 25 |
->
 > **LIVE BUILD REQUIREMENT** — visible footer credit line reading "Built for Digital Heroes Training Task", linked to digitalheroesco.com.
 
 ---
@@ -85,16 +77,6 @@ This document captures the Digital Heroes Task A brief verbatim, then maps every
 
 ---
 
-## Evaluation criteria self-check
-
-| Criterion | Weight | Evidence |
-|---|---|---|
-| Architecture & data modeling | 30 | [`architecture.md`](architecture.md), [`data-model.md`](data-model.md) — layered folder structure, ER diagram, indexes on hot queries, cascade-delete strategy |
-| Auth & permission correctness | 25 | [`architecture.md`](architecture.md) permission matrix; [`server/src/middleware/`](../server/src/middleware/); auth test suite (18+ cases) verifying every permission edge |
-| API design & documentation | 20 | README API reference; Postman collection (`postman/lead-management.postman_collection.json`) with ~50 assertions; HTTP status coverage; documented trade-offs in [`decisions.md`](decisions.md) |
-| Test coverage & deployment | 25 | ~37 tests across 3 files; `npm run test:coverage` report; live URLs; deployment runbook in README |
-
----
 
 ## Deliberate cuts (documented for interview honesty)
 

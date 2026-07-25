@@ -12,8 +12,8 @@ The brief is deceptively short. Two phrases carried most of the weight:
 2. *"We are looking for your judgment and your voice, and your interview will be built around the decisions you made."* — decision quality > cleverness. Every non-trivial choice needs a defensible reason.
 
 Given those, the plan optimized for:
-- **Data-model + auth correctness first** (30 + 25 = 55 pts of the rubric)
-- **Test coverage + deployment as first-class deliverables**, not afterthoughts (25 pts)
+- **Data-model + auth correctness first** 
+- **Test coverage + deployment as first-class deliverables**, not afterthoughts
 - **Documented trade-offs everywhere** a real decision was made (interview cheat sheet)
 
 ---
