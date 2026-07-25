@@ -233,11 +233,6 @@ Verify by logging in as admin at your Vercel URL.
 - Assign to member → log out → log in as member → change status → add a note
 - Open the lead → activity timeline shows `created` + `assigned` + `status_changed` + `note_added`
 
-### 7. Update this README
-Replace the placeholder live URLs at the top with your real URLs. Commit + push. Both platforms auto-redeploy.
-
----
-
 ## Documentation
 
 Deeper docs in [`docs/`](docs/):
