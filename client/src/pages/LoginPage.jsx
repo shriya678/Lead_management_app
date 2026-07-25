@@ -4,11 +4,20 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { isEmail } from '../lib/validate';
 import FormField from '../components/FormField';
+import useFormValidation from '../hooks/useFormValidation';
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm ' +
   'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 ' +
   'disabled:bg-gray-50 disabled:text-gray-500';
+
+function validateLogin(form) {
+  const next = {};
+  if (!form.email.trim()) next.email = 'Email is required';
+  else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
+  if (!form.password) next.password = 'Password is required';
+  return next;
+}
 
 export default function LoginPage() {
   const { token, login } = useAuth();
@@ -17,29 +26,25 @@ export default function LoginPage() {
   const from = location.state?.from || '/leads';
 
   const [form, setForm] = useState({ email: '', password: '' });
-  const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { visibleError, markTouched, markAllTouched, isValid } = useFormValidation(
+    form,
+    validateLogin
+  );
 
   if (token) return <Navigate to={from} replace />;
 
-  const setField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const validate = () => {
-    const next = {};
-    if (!form.email.trim()) next.email = 'Email is required';
-    else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
-    if (!form.password) next.password = 'Password is required';
-    return next;
+  const setField = (key) => (e) => {
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    if (serverError) setServerError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const v = validate();
-    if (Object.keys(v).length > 0) {
-      setErrors(v);
-      return;
-    }
-    setErrors({});
+    markAllTouched();
+    if (!isValid) return;
+    setServerError('');
     setSubmitting(true);
     try {
       await login(form.email.trim().toLowerCase(), form.password);
@@ -50,7 +55,7 @@ export default function LoginPage() {
         err.response?.status === 401
           ? 'Invalid email or password'
           : err.response?.data?.message || 'Server error, try again';
-      setErrors({ form: msg });
+      setServerError(msg);
       setForm((prev) => ({ ...prev, password: '' }));
       toast.error(msg);
     } finally {
@@ -66,34 +71,36 @@ export default function LoginPage() {
       </p>
 
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Email" htmlFor="email" error={errors.email} required>
+        <FormField label="Email" htmlFor="email" error={visibleError('email')} required>
           <input
             id="email"
             type="email"
             className={inputClass}
             value={form.email}
             onChange={setField('email')}
+            onBlur={markTouched('email')}
             autoComplete="username"
             autoFocus
             disabled={submitting}
           />
         </FormField>
 
-        <FormField label="Password" htmlFor="password" error={errors.password} required>
+        <FormField label="Password" htmlFor="password" error={visibleError('password')} required>
           <input
             id="password"
             type="password"
             className={inputClass}
             value={form.password}
             onChange={setField('password')}
+            onBlur={markTouched('password')}
             autoComplete="current-password"
             disabled={submitting}
           />
         </FormField>
 
-        {errors.form && (
+        {serverError && (
           <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-700">
-            {errors.form}
+            {serverError}
           </div>
         )}
 

@@ -3,7 +3,12 @@ const { createUser } = require('./factories');
 
 async function loginAndToken(app, { email, password }) {
   const res = await request(app).post('/api/auth/login').send({ email, password });
-  return res.body.token;
+  return res.body.accessToken;
+}
+
+async function loginAndTokens(app, { email, password }) {
+  const res = await request(app).post('/api/auth/login').send({ email, password });
+  return { access: res.body.accessToken, refresh: res.body.refreshToken };
 }
 
 async function seedAdminAndMember(app) {
@@ -24,4 +29,4 @@ async function seedAdminAndMember(app) {
   return { admin, member, adminToken, memberToken };
 }
 
-module.exports = { loginAndToken, seedAdminAndMember };
+module.exports = { loginAndToken, loginAndTokens, seedAdminAndMember };

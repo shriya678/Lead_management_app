@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { isEmail } from '../lib/validate';
 import Modal from './Modal';
 import FormField from './FormField';
+import useFormValidation from '../hooks/useFormValidation';
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm ' +
@@ -12,26 +13,36 @@ const inputClass =
 
 const INITIAL = { name: '', email: '', password: '', role: 'member' };
 
+function validateAddUser(form) {
+  const next = {};
+  if (!form.name.trim()) next.name = 'Name is required';
+  if (!form.email.trim()) next.email = 'Email is required';
+  else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
+  if (!form.password) next.password = 'Password is required';
+  else if (form.password.length < 6) next.password = 'At least 6 characters';
+  return next;
+}
+
 export default function AddUserModal({ open, onClose, onCreated }) {
   const [form, setForm] = useState(INITIAL);
-  const [errors, setErrors] = useState({});
+  // Server-side field errors (e.g. 409 email conflict) live separately from
+  // client validation so they don't disappear when the user re-types.
+  const [serverErrors, setServerErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const { visibleError, markTouched, markAllTouched, isValid, reset: resetValidation } =
+    useFormValidation(form, validateAddUser);
 
-  const setField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const validate = () => {
-    const next = {};
-    if (!form.name.trim()) next.name = 'Name is required';
-    if (!form.email.trim()) next.email = 'Email is required';
-    else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
-    if (!form.password) next.password = 'Password is required';
-    else if (form.password.length < 6) next.password = 'At least 6 characters';
-    return next;
+  const setField = (key) => (e) => {
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    if (serverErrors[key]) {
+      setServerErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
   };
 
   const reset = () => {
     setForm(INITIAL);
-    setErrors({});
+    setServerErrors({});
+    resetValidation();
   };
 
   const handleClose = () => {
@@ -42,12 +53,9 @@ export default function AddUserModal({ open, onClose, onCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const v = validate();
-    if (Object.keys(v).length > 0) {
-      setErrors(v);
-      return;
-    }
-    setErrors({});
+    markAllTouched();
+    if (!isValid) return;
+    setServerErrors({});
     setSubmitting(true);
     try {
       await api.post('/auth/register', {
@@ -62,7 +70,7 @@ export default function AddUserModal({ open, onClose, onCreated }) {
       onClose();
     } catch (err) {
       if (err.response?.status === 409) {
-        setErrors({ email: 'Email already in use' });
+        setServerErrors({ email: 'Email already in use' });
       }
       toast.error(err.response?.data?.message || 'Failed to create user');
     } finally {
@@ -70,40 +78,45 @@ export default function AddUserModal({ open, onClose, onCreated }) {
     }
   };
 
+  const errorFor = (key) => serverErrors[key] || visibleError(key);
+
   return (
     <Modal open={open} onClose={handleClose} title="Add user">
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Name" htmlFor="new-name" error={errors.name} required>
+        <FormField label="Name" htmlFor="new-name" error={errorFor('name')} required>
           <input
             id="new-name"
             type="text"
             className={inputClass}
             value={form.name}
             onChange={setField('name')}
+            onBlur={markTouched('name')}
             autoFocus
             disabled={submitting}
           />
         </FormField>
 
-        <FormField label="Email" htmlFor="new-email" error={errors.email} required>
+        <FormField label="Email" htmlFor="new-email" error={errorFor('email')} required>
           <input
             id="new-email"
             type="email"
             className={inputClass}
             value={form.email}
             onChange={setField('email')}
+            onBlur={markTouched('email')}
             autoComplete="off"
             disabled={submitting}
           />
         </FormField>
 
-        <FormField label="Password" htmlFor="new-password" error={errors.password} required>
+        <FormField label="Password" htmlFor="new-password" error={errorFor('password')} required>
           <input
             id="new-password"
             type="password"
             className={inputClass}
             value={form.password}
             onChange={setField('password')}
+            onBlur={markTouched('password')}
             autoComplete="new-password"
             disabled={submitting}
           />

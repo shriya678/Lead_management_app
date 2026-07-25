@@ -118,21 +118,79 @@ All refs use Mongoose `.populate()` in the API layer to hydrate names/emails whe
 
 ---
 
-## JWT payload shape
+## JWT payload shapes
 
-Encoded by `utils/jwt.signToken(user)`:
+Two separately-signed tokens per session — a short-lived **access** token attached
+to every request, and a longer-lived **refresh** token used only to obtain a fresh
+access when the current one expires. Different secrets so a leaked access token
+can't be forged into a refresh (and vice-versa).
+
+### Access token — `utils/jwt.signAccessToken(user)`
 
 ```json
 {
   "sub":  "<user._id>",
   "role": "admin | member",
   "name": "<user.name>",
+  "type": "access",
   "iat":  <issued at, unix seconds>,
-  "exp":  <expiry, unix seconds — 7 days after iat>
+  "exp":  <iat + 15 min>
 }
 ```
 
-Signed HS256 with `JWT_SECRET`. Client attaches to every request as `Authorization: Bearer <token>`.
+Signed HS256 with `JWT_SECRET`. Client attaches to every request as
+`Authorization: Bearer <accessToken>`.
+
+### Refresh token — `utils/jwt.signRefreshToken(user)`
+
+```json
+{
+  "sub":  "<user._id>",
+  "type": "refresh",
+  "iat":  <issued at, unix seconds>,
+  "exp":  <iat + 7 days>
+}
+```
+
+Signed HS256 with `JWT_REFRESH_SECRET` (a *different* secret). Minimal payload —
+role and name are re-read from the DB at refresh time, so a mid-session role
+change takes effect on the next refresh.
+
+### Refresh flow
+
+```
+Client                                         Server
+  │
+  │  request with expired accessToken
+  │──────────────────────────────────────────►
+  │                                             401 Unauthorized (Token expired)
+  │◄──────────────────────────────────────────
+  │
+  │  POST /api/auth/refresh
+  │  { refreshToken }
+  │──────────────────────────────────────────►
+  │                                             verify sig (JWT_REFRESH_SECRET)
+  │                                             confirm payload.type === 'refresh'
+  │                                             User.findById(payload.sub)
+  │                                             signAccessToken(user)
+  │                                             200 { accessToken }
+  │◄──────────────────────────────────────────
+  │
+  │  retry original request with new accessToken
+  │──────────────────────────────────────────►
+  │                                             200 (or whatever the original returned)
+  │◄──────────────────────────────────────────
+```
+
+Whole flow is transparent to the user — the Axios response interceptor on the
+client handles it and retries the original request. Only if `/auth/refresh`
+itself returns 401 (refresh token expired or invalid) is the user hard-
+navigated to `/login`.
+
+**Design choice:** stateless (no DB storage of refresh tokens). Simpler; refresh
+is a signature check, no DB write on login, no DB lookup for the token itself
+(just for the user). Trade-off: cannot revoke an individual leaked refresh
+before it expires. Production upgrade documented in [`decisions.md`](decisions.md#5).
 
 ---
 

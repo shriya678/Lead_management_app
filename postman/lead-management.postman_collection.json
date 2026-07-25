@@ -13,6 +13,8 @@
     { "key": "memberPassword", "value": "Member@123" },
     { "key": "adminToken", "value": "" },
     { "key": "memberToken", "value": "" },
+    { "key": "adminRefreshToken", "value": "" },
+    { "key": "memberRefreshToken", "value": "" },
     { "key": "adminId", "value": "" },
     { "key": "memberId", "value": "" },
     { "key": "leadId", "value": "" }
@@ -39,9 +41,11 @@
             "script": { "type": "text/javascript", "exec": [
               "pm.test('200 OK', () => pm.response.to.have.status(200));",
               "const res = pm.response.json();",
-              "pm.test('Has token', () => pm.expect(res.token).to.be.a('string'));",
+              "pm.test('Has accessToken', () => pm.expect(res.accessToken).to.be.a('string'));",
+              "pm.test('Has refreshToken', () => pm.expect(res.refreshToken).to.be.a('string'));",
               "pm.test('User role is admin', () => pm.expect(res.user.role).to.eql('admin'));",
-              "pm.collectionVariables.set('adminToken', res.token);",
+              "pm.collectionVariables.set('adminToken', res.accessToken);",
+              "pm.collectionVariables.set('adminRefreshToken', res.refreshToken);",
               "pm.collectionVariables.set('adminId', res.user.id);"
             ]}
           }]
@@ -63,9 +67,11 @@
             "script": { "type": "text/javascript", "exec": [
               "pm.test('200 OK', () => pm.response.to.have.status(200));",
               "const res = pm.response.json();",
-              "pm.test('Has token', () => pm.expect(res.token).to.be.a('string'));",
+              "pm.test('Has accessToken', () => pm.expect(res.accessToken).to.be.a('string'));",
+              "pm.test('Has refreshToken', () => pm.expect(res.refreshToken).to.be.a('string'));",
               "pm.test('User role is member', () => pm.expect(res.user.role).to.eql('member'));",
-              "pm.collectionVariables.set('memberToken', res.token);",
+              "pm.collectionVariables.set('memberToken', res.accessToken);",
+              "pm.collectionVariables.set('memberRefreshToken', res.refreshToken);",
               "pm.collectionVariables.set('memberId', res.user.id);"
             ]}
           }]
@@ -131,6 +137,86 @@
             "listen": "test",
             "script": { "type": "text/javascript", "exec": [
               "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "Refresh - happy path (200)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"refreshToken\": \"{{adminRefreshToken}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const res = pm.response.json();",
+              "pm.test('Has new accessToken', () => pm.expect(res.accessToken).to.be.a('string'));",
+              "pm.test('No new refresh token issued (stateless, non-rotating)', () => pm.expect(res).to.not.have.property('refreshToken'));",
+              "pm.collectionVariables.set('adminToken', res.accessToken);"
+            ]}
+          }]
+        },
+        {
+          "name": "Refresh - missing refreshToken (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 BadRequest', () => pm.response.to.have.status(400));"
+            ]}
+          }]
+        },
+        {
+          "name": "Refresh - malformed token (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"refreshToken\": \"not-a-real-jwt\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        },
+        {
+          "name": "Refresh - access token used as refresh (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"refreshToken\": \"{{adminToken}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('401 Unauthorized (different signing secret)', () => pm.response.to.have.status(401));"
             ]}
           }]
         },

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { isEmail, isIndianPhone } from '../lib/validate';
 import FormField from '../components/FormField';
+import useFormValidation from '../hooks/useFormValidation';
 
 const SOURCES = [
   { value: 'website', label: 'Website' },
@@ -25,33 +26,30 @@ const inputClass =
   'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 ' +
   'disabled:bg-gray-50 disabled:text-gray-500';
 
+function validateSubmit(form) {
+  const next = {};
+  if (!form.name.trim()) next.name = 'Name is required';
+  if (!form.email.trim()) next.email = 'Email is required';
+  else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
+  if (form.phone.trim() && !isIndianPhone(form.phone)) {
+    next.phone = 'Enter a valid Indian phone (10 digits, optional +91)';
+  }
+  return next;
+}
+
 export default function SubmitPage() {
   const [form, setForm] = useState(INITIAL);
-  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const { visibleError, markTouched, markAllTouched, isValid, reset: resetValidation } =
+    useFormValidation(form, validateSubmit);
 
   const setField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const validate = () => {
-    const next = {};
-    if (!form.name.trim()) next.name = 'Name is required';
-    if (!form.email.trim()) next.email = 'Email is required';
-    else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
-    if (form.phone.trim() && !isIndianPhone(form.phone)) {
-      next.phone = 'Enter a valid Indian phone (10 digits, optional +91)';
-    }
-    return next;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const v = validate();
-    if (Object.keys(v).length > 0) {
-      setErrors(v);
-      return;
-    }
-    setErrors({});
+    markAllTouched();
+    if (!isValid) return;
     setSubmitting(true);
     try {
       await api.post('/public/leads', {
@@ -73,7 +71,7 @@ export default function SubmitPage() {
 
   const reset = () => {
     setForm(INITIAL);
-    setErrors({});
+    resetValidation();
     setSubmitted(false);
   };
 
@@ -103,37 +101,40 @@ export default function SubmitPage() {
       </p>
 
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Name" htmlFor="name" error={errors.name} required>
+        <FormField label="Name" htmlFor="name" error={visibleError('name')} required>
           <input
             id="name"
             type="text"
             className={inputClass}
             value={form.name}
             onChange={setField('name')}
+            onBlur={markTouched('name')}
             autoComplete="name"
             disabled={submitting}
           />
         </FormField>
 
-        <FormField label="Email" htmlFor="email" error={errors.email} required>
+        <FormField label="Email" htmlFor="email" error={visibleError('email')} required>
           <input
             id="email"
             type="email"
             className={inputClass}
             value={form.email}
             onChange={setField('email')}
+            onBlur={markTouched('email')}
             autoComplete="email"
             disabled={submitting}
           />
         </FormField>
 
-        <FormField label="Phone" htmlFor="phone" error={errors.phone}>
+        <FormField label="Phone" htmlFor="phone" error={visibleError('phone')}>
           <input
             id="phone"
             type="tel"
             className={inputClass}
             value={form.phone}
             onChange={setField('phone')}
+            onBlur={markTouched('phone')}
             autoComplete="tel"
             placeholder="e.g. +91 98765 43210"
             maxLength={17}

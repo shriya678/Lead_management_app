@@ -207,3 +207,111 @@ describe('Ownership rules — member scoped to own leads', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('Login response shape (access + refresh)', () => {
+  test('login returns accessToken, refreshToken, and user', async () => {
+    await createUser({ email: 'shape@test.com', role: 'admin' });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'shape@test.com', password: 'Test@1234' });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.accessToken).toBe('string');
+    expect(typeof res.body.refreshToken).toBe('string');
+    expect(res.body.user).toHaveProperty('email', 'shape@test.com');
+    expect(res.body).not.toHaveProperty('token'); // legacy field removed
+  });
+
+  test('access and refresh tokens are distinct (different secrets)', async () => {
+    await createUser({ email: 'distinct@test.com', role: 'admin' });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'distinct@test.com', password: 'Test@1234' });
+    expect(res.body.accessToken).not.toBe(res.body.refreshToken);
+  });
+});
+
+describe('POST /api/auth/refresh', () => {
+  async function loginAndGetRefresh() {
+    await createUser({ email: 'refresh@test.com', role: 'admin' });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'refresh@test.com', password: 'Test@1234' });
+    return {
+      refreshToken: res.body.refreshToken,
+      accessToken: res.body.accessToken,
+    };
+  }
+
+  test('happy path: returns a new access token', async () => {
+    const { refreshToken } = await loginAndGetRefresh();
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.accessToken).toBe('string');
+    // No new refresh token issued (stateless, non-rotating).
+    expect(res.body).not.toHaveProperty('refreshToken');
+  });
+
+  test('400 when refreshToken is missing from body', async () => {
+    const res = await request(app).post('/api/auth/refresh').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/refreshToken/);
+  });
+
+  test('401 when refresh token is malformed', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: 'not-a-real-jwt' });
+    expect(res.status).toBe(401);
+  });
+
+  test('401 when access token is passed as refresh token (different secret)', async () => {
+    const { accessToken } = await loginAndGetRefresh();
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: accessToken });
+    expect(res.status).toBe(401);
+  });
+
+  test('401 when refresh token is passed as access token (different secret)', async () => {
+    const { refreshToken } = await loginAndGetRefresh();
+    const res = await request(app)
+      .get('/api/users')
+      .set('Authorization', `Bearer ${refreshToken}`);
+    expect(res.status).toBe(401);
+  });
+
+  test('401 with expired refresh token', async () => {
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      { sub: 'x', type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '1ms' }
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: token });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toMatch(/expired/i);
+  });
+
+  test('401 when the user in the refresh token has been deleted', async () => {
+    const { refreshToken } = await loginAndGetRefresh();
+    // Simulate account deletion by wiping users between issue and refresh.
+    const User = require('../src/models/User');
+    await User.deleteMany({});
+    const res = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(res.status).toBe(401);
+  });
+
+  test('new access token from refresh actually authorizes protected routes', async () => {
+    const { refreshToken } = await loginAndGetRefresh();
+    const refreshRes = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken });
+    const newAccess = refreshRes.body.accessToken;
+
+    const usersRes = await request(app)
+      .get('/api/users')
+      .set('Authorization', `Bearer ${newAccess}`);
+    expect(usersRes.status).toBe(200);
+  });
+});
