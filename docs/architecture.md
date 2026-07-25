@@ -90,8 +90,10 @@ routes/index.js → mounts '/leads' → routes/leads.js
         ▼
 routes/leads.js: router.use(requireAuth) → requireAuth middleware
   - Read 'Authorization' header, split "Bearer "
-  - jwt.verify(token, JWT_SECRET)
-  - req.user = { id, role, name }  (from token payload)
+  - verifyAccessToken(token) — verifies with JWT_SECRET (NOT the refresh secret)
+  - req.user = { id, role, name }  (from access-token payload)
+  - Expired access token → 401; client's Axios interceptor calls /auth/refresh
+    and retries this request transparently. See docs/data-model.md#refresh-flow.
         │
         ▼
 router.patch('/:id', asyncHandler(leadsController.update))

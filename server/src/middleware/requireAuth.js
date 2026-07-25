@@ -1,7 +1,7 @@
-const { verifyToken } = require('../utils/jwt');
+const { verifyAccessToken } = require('../utils/jwt');
 
-// Reads `Authorization: Bearer <token>`, verifies the JWT, and attaches a
-// minimal user shape to req.user for downstream middleware/handlers.
+// Reads `Authorization: Bearer <token>`, verifies the ACCESS JWT (not refresh),
+// and attaches a minimal user shape to req.user for downstream handlers.
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const [scheme, token] = header.split(' ');
@@ -14,7 +14,7 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = verifyToken(token);
+    const payload = verifyAccessToken(token);
     req.user = {
       id: payload.sub,
       role: payload.role,

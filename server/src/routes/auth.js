@@ -8,6 +8,9 @@ const router = Router();
 
 router.post('/login', asyncHandler(authController.login));
 
+// Not requireAuth — the access token is likely already expired when this is called.
+router.post('/refresh', asyncHandler(authController.refresh));
+
 router.post(
   '/register',
   requireAuth,

@@ -6,9 +6,23 @@ const AuthContext = createContext(null);
 function readInitial() {
   try {
     const raw = localStorage.getItem('auth');
-    return raw ? JSON.parse(raw) : { user: null, token: null };
+    if (!raw) return { user: null, accessToken: null, refreshToken: null };
+    const parsed = JSON.parse(raw);
+    // Back-compat: older shape used `token` instead of accessToken/refreshToken.
+    if (parsed.token && !parsed.accessToken) {
+      return {
+        user: parsed.user || null,
+        accessToken: parsed.token,
+        refreshToken: null,
+      };
+    }
+    return {
+      user: parsed.user || null,
+      accessToken: parsed.accessToken || null,
+      refreshToken: parsed.refreshToken || null,
+    };
   } catch {
-    return { user: null, token: null };
+    return { user: null, accessToken: null, refreshToken: null };
   }
 }
 
@@ -17,7 +31,11 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
-    const next = { user: res.data.user, token: res.data.token };
+    const next = {
+      user: res.data.user,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+    };
     localStorage.setItem('auth', JSON.stringify(next));
     setAuth(next);
     return next.user;
@@ -25,13 +43,13 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth');
-    setAuth({ user: null, token: null });
+    setAuth({ user: null, accessToken: null, refreshToken: null });
   }, []);
 
   const value = useMemo(
     () => ({
       user: auth.user,
-      token: auth.token,
+      token: auth.accessToken, // kept as `token` for back-compat with existing consumers
       isAdmin: auth.user?.role === 'admin',
       login,
       logout,

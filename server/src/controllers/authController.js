@@ -1,6 +1,10 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const { signToken } = require('../utils/jwt');
+const {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} = require('../utils/jwt');
 
 const BCRYPT_ROUNDS = 10;
 const VALID_ROLES = ['admin', 'member'];
@@ -30,8 +34,54 @@ async function login(req, res) {
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials' });
   }
 
-  const token = signToken(user);
-  return res.status(200).json({ token, user: user.toPublicJSON() });
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  return res.status(200).json({
+    accessToken,
+    refreshToken,
+    user: user.toPublicJSON(),
+  });
+}
+
+async function refresh(req, res) {
+  const { refreshToken } = req.body || {};
+
+  if (!refreshToken) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'refreshToken is required',
+    });
+  }
+
+  let payload;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch (err) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: err.name === 'TokenExpiredError' ? 'Refresh token expired' : 'Invalid refresh token',
+    });
+  }
+
+  // Reject any non-refresh token (defense in depth if secrets ever get mixed up).
+  if (payload.type !== 'refresh') {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Invalid refresh token',
+    });
+  }
+
+  // Look up the user to pick up any role/name changes since the refresh was issued.
+  const user = await User.findById(payload.sub);
+  if (!user) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'User no longer exists',
+    });
+  }
+
+  const accessToken = signAccessToken(user);
+  return res.status(200).json({ accessToken });
 }
 
 async function register(req, res) {
@@ -71,4 +121,4 @@ async function register(req, res) {
   return res.status(201).json({ user: user.toPublicJSON() });
 }
 
-module.exports = { login, register };
+module.exports = { login, refresh, register };

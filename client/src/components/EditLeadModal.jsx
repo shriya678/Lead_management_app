@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { isEmail, isIndianPhone } from '../lib/validate';
 import Modal from './Modal';
 import FormField from './FormField';
+import useFormValidation from '../hooks/useFormValidation';
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm ' +
@@ -17,26 +18,8 @@ const SOURCES = ['website', 'referral', 'ad', 'other'];
 const ADMIN_FIELDS = ['name', 'email', 'phone', 'company', 'source'];
 const MEMBER_FIELDS = ['phone', 'company'];
 
-export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved }) {
-  const allowed = isAdmin ? ADMIN_FIELDS : MEMBER_FIELDS;
-
-  const [form, setForm] = useState({});
-  const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open || !lead) return;
-    const initial = {};
-    for (const key of allowed) {
-      initial[key] = lead[key] || (key === 'source' ? 'website' : '');
-    }
-    setForm(initial);
-    setErrors({});
-  }, [open, lead, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const setField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const validate = () => {
+function makeValidator(allowed) {
+  return function validate(form) {
     const next = {};
     if (allowed.includes('name') && !form.name?.trim()) {
       next.name = 'Name is required';
@@ -50,6 +33,28 @@ export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved })
     }
     return next;
   };
+}
+
+export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved }) {
+  const allowed = isAdmin ? ADMIN_FIELDS : MEMBER_FIELDS;
+  const validate = makeValidator(allowed);
+
+  const [form, setForm] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const { visibleError, markTouched, markAllTouched, isValid, reset: resetValidation } =
+    useFormValidation(form, validate);
+
+  useEffect(() => {
+    if (!open || !lead) return;
+    const initial = {};
+    for (const key of allowed) {
+      initial[key] = lead[key] || (key === 'source' ? 'website' : '');
+    }
+    setForm(initial);
+    resetValidation();
+  }, [open, lead, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const handleClose = () => {
     if (submitting) return;
@@ -58,12 +63,8 @@ export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved })
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const v = validate();
-    if (Object.keys(v).length > 0) {
-      setErrors(v);
-      return;
-    }
-    setErrors({});
+    markAllTouched();
+    if (!isValid) return;
 
     // Diff — only send fields that actually changed. Empty string on an
     // optional field means "clear it" (null), so backend unsets it.
@@ -98,13 +99,14 @@ export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved })
     <Modal open={open} onClose={handleClose} title="Edit lead">
       <form onSubmit={handleSubmit} noValidate>
         {allowed.includes('name') && (
-          <FormField label="Name" htmlFor="edit-name" error={errors.name} required>
+          <FormField label="Name" htmlFor="edit-name" error={visibleError('name')} required>
             <input
               id="edit-name"
               type="text"
               className={inputClass}
               value={form.name || ''}
               onChange={setField('name')}
+              onBlur={markTouched('name')}
               autoFocus
               disabled={submitting}
             />
@@ -112,13 +114,14 @@ export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved })
         )}
 
         {allowed.includes('email') && (
-          <FormField label="Email" htmlFor="edit-email" error={errors.email} required>
+          <FormField label="Email" htmlFor="edit-email" error={visibleError('email')} required>
             <input
               id="edit-email"
               type="email"
               className={inputClass}
               value={form.email || ''}
               onChange={setField('email')}
+              onBlur={markTouched('email')}
               autoComplete="off"
               disabled={submitting}
             />
@@ -126,13 +129,14 @@ export default function EditLeadModal({ open, onClose, lead, isAdmin, onSaved })
         )}
 
         {allowed.includes('phone') && (
-          <FormField label="Phone" htmlFor="edit-phone" error={errors.phone}>
+          <FormField label="Phone" htmlFor="edit-phone" error={visibleError('phone')}>
             <input
               id="edit-phone"
               type="tel"
               className={inputClass}
               value={form.phone || ''}
               onChange={setField('phone')}
+              onBlur={markTouched('phone')}
               placeholder="e.g. +91 98765 43210"
               maxLength={17}
               disabled={submitting}

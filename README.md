@@ -30,7 +30,7 @@ A mini-CRM: public lead capture, authenticated dashboard, role-based permissions
 | Frontend | React 18 + Vite + Tailwind CSS + React Router + Axios |
 | Backend | Node.js + Express + Mongoose |
 | Database | MongoDB Atlas (free M0) |
-| Auth | JWT (`Authorization: Bearer`), bcryptjs, 7-day expiry |
+| Auth | JWT (`Authorization: Bearer`) + refresh token · 15m access + 7d refresh · bcryptjs · dual-secret stateless refresh |
 | Tests | Jest + Supertest + mongodb-memory-server (~37 tests) |
 | Deploy | Render (API) + Vercel (UI) + Atlas (DB) |
 
@@ -113,7 +113,10 @@ Every endpoint returns JSON. Error responses shape: `{ error, message, [details]
 | Method | Endpoint | Body | Auth | Status |
 |---|---|---|---|---|
 | `POST` | `/auth/login` | `{ email, password }` | — | 200 · 400 · 401 |
+| `POST` | `/auth/refresh` | `{ refreshToken }` | — | 200 · 400 · 401 |
 | `POST` | `/auth/register` | `{ name, email, password, role }` | admin | 201 · 400 · 401 · 403 · 409 |
+
+`POST /auth/login` returns `{ accessToken, refreshToken, user }`. The access token is short-lived (15 min); the client hits `/auth/refresh` transparently on 401 to swap the expired access for a new one, retrying the original request. A stale refresh token forces a real re-login.
 
 ### Leads
 
@@ -150,14 +153,22 @@ Response: `{ items, page, limit, total, pages }`.
 ### Example curl
 
 ```bash
-# Login as admin
-TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login \
+# Login as admin — response has { accessToken, refreshToken, user }
+LOGIN=$(curl -s -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@demo.com","password":"Admin@123"}' | jq -r .token)
+  -d '{"email":"admin@demo.com","password":"Admin@123"}')
+TOKEN=$(echo "$LOGIN" | jq -r .accessToken)
+REFRESH=$(echo "$LOGIN" | jq -r .refreshToken)
 
 # List leads with filter
 curl "http://localhost:5000/api/leads?status=new&page=1&limit=20" \
   -H "Authorization: Bearer $TOKEN"
+
+# Exchange the refresh token for a new access token (client does this
+# automatically on 401 — this is just to show the endpoint by hand)
+curl -X POST http://localhost:5000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d "{\"refreshToken\":\"$REFRESH\"}"
 
 # Public lead capture (no auth)
 curl -X POST http://localhost:5000/api/public/leads \
@@ -189,8 +200,10 @@ Import [`postman/lead-management.postman_collection.json`](postman/lead-manageme
    - **Node version:** 18+
 4. **Environment** tab — add (see [`server/.env.production.example`](server/.env.production.example)):
    - `MONGO_URI` = Atlas connection string
-   - `JWT_SECRET` = 64-char random hex (`openssl rand -hex 32`)
-   - `JWT_EXPIRES_IN` = `7d`
+   - `JWT_SECRET` = 64-char random hex (`openssl rand -hex 32`) — signs 15m access tokens
+   - `JWT_REFRESH_SECRET` = a **different** 64-char random hex — signs 7d refresh tokens
+   - `JWT_ACCESS_EXPIRES_IN` = `15m` (optional, default)
+   - `JWT_REFRESH_EXPIRES_IN` = `7d` (optional, default)
    - `NODE_ENV` = `production`
    - `FRONTEND_URL` = placeholder for now (`http://localhost:5173`) — update in step 4
 5. Deploy → wait for `GET /api/health` to return 200.

@@ -40,12 +40,16 @@ ADR-style short entries. One per meaningful trade-off across the 11 feature bran
 
 ---
 
-### 5. 7-day JWT expiry, no refresh token
+### 5. 15-minute access token + 7-day refresh token (stateless, dual-secret)
 
-**Context:** How long should sessions last?
-**Chose:** 7-day access token, no refresh.
-**Rejected:** 15-min access + refresh token (better security posture but doubles endpoint count + rotation logic — 2-3 hours of scope); 24h (safer but reviewer might get logged out mid-interview).
-**Consequence:** Can't revoke a leaked token before 7 days. Production would move to 15-min access + rotating refresh with a revocation table.
+**Context:** How long should sessions last, and how does a client stay signed in without exposing a long-lived credential on every request?
+**Chose:** Short-lived (15m) access token signed with `JWT_SECRET`, longer-lived (7d) refresh token signed with a **separate** `JWT_REFRESH_SECRET`. New `POST /api/auth/refresh` endpoint swaps a refresh token for a fresh access token. Client's Axios interceptor handles this transparently on 401 and retries the original request. No server-side storage of refresh tokens (stateless).
+**Rejected:**
+  - **Long-lived (7d) access token, no refresh** (previous choice) — simple but a leaked token is a 7-day problem, and every request carries a credential valid for a week.
+  - **Whitelisted refresh tokens (hashed in DB)** — adds revocability but requires a DB round-trip on every refresh and a new model to manage. Correct for production; over-scope for this build.
+  - **Rotating refresh (issue new refresh on every /refresh call, revoke old)** — best security (compromised refresh gets detected on next use) but requires the whitelist above plus rotation bookkeeping.
+**Consequence:** Individual leaked refresh tokens cannot be revoked before their 7-day expiry — the trade-off of statelessness. Two separate signing secrets means a leaked access token cannot be presented as a refresh (and vice-versa). Refresh reads the user record before issuing a new access token, so a role change during a session takes effect on the next refresh. Production upgrade path is documented: move to whitelisted rotating refresh with a `RefreshToken` model when a business need for revocation appears.
+**Note:** This decision supersedes an earlier "7-day access, no refresh" choice made under pure time-pressure. The upgrade shipped after the initial submission on the `feature/auth-refresh-and-live-validation` branch.
 
 ---
 
@@ -163,3 +167,16 @@ ADR-style short entries. One per meaningful trade-off across the 11 feature bran
 **Chose:** Client validates optional Indian format (`+91` prefix optional, 10 digits, strips formatting chars). Backend keeps `phone: String` unconstrained.
 **Rejected:** Full E.164 international; ultra-strict `+91` required; backend also validates strictly.
 **Consequence:** Client can be stricter than backend when the business rule is "the form on OUR website is for India". Backend permissive means a real CRM can accept international leads via API (CSV import, third-party integrations) without a schema migration.
+
+---
+
+### 19. Live per-field validation (touched-then-live), not submit-only
+
+**Context:** All forms initially validated only on submit — user filled a whole form, hit Submit, then discovered which fields were wrong. Poor UX for anything longer than 2 fields.
+**Chose:** Live validation via a shared `useFormValidation(form, validate)` hook. A field's error is HIDDEN until it has been blurred at least once (touched) OR the form has been submit-attempted. Once visible, the error updates live as the user types.
+**Rejected:**
+  - **Submit-only** (previous behavior) — simplest but frustrating; user gets errors in a batch after committing to the form.
+  - **Live-on-every-render from mount** — shows "Name is required" on empty fields the moment the page loads, which reads as accusatory.
+  - **Blur-only, not live** — errors appear once but don't clear as the user fixes them, so the red text lingers past the fix.
+  - **A form library (react-hook-form, Formik)** — brings this pattern out of the box, but pulls in an extra dep for what turned out to be ~30 lines of custom hook, and the app has only 5 forms.
+**Consequence:** Server-side field errors (e.g. 409 on duplicate email in the Add User modal) live in a separate `serverErrors` state so they don't get overwritten by client validation on the next keystroke — the two error channels compose in the FormField via a small `errorFor(key)` helper. NoteForm was not touched because its only validation (empty body) already lives live via the disabled Post button.
