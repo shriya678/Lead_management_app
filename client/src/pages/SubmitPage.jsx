@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
-import { isEmail } from '../lib/validate';
+import { isEmail, isIndianPhone } from '../lib/validate';
 import FormField from '../components/FormField';
 
 const SOURCES = [
@@ -38,6 +38,9 @@ export default function SubmitPage() {
     if (!form.name.trim()) next.name = 'Name is required';
     if (!form.email.trim()) next.email = 'Email is required';
     else if (!isEmail(form.email)) next.email = 'Enter a valid email address';
+    if (form.phone.trim() && !isIndianPhone(form.phone)) {
+      next.phone = 'Enter a valid Indian phone (10 digits, optional +91)';
+    }
     return next;
   };
 
@@ -124,7 +127,7 @@ export default function SubmitPage() {
           />
         </FormField>
 
-        <FormField label="Phone" htmlFor="phone">
+        <FormField label="Phone" htmlFor="phone" error={errors.phone}>
           <input
             id="phone"
             type="tel"
@@ -132,6 +135,8 @@ export default function SubmitPage() {
             value={form.phone}
             onChange={setField('phone')}
             autoComplete="tel"
+            placeholder="e.g. +91 98765 43210"
+            maxLength={17}
             disabled={submitting}
           />
         </FormField>
